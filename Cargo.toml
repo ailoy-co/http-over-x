@@ -1,0 +1,74 @@
+[package]
+name = "http-over-x"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+license = "Apache-2.0"
+repository = "https://github.com/ailoy-co/http-over-x"
+description = "One HTTP client for a server that is a child process or a URL: requests over its stdio or over TCP, with the refusals, retries, credentials and event-stream logs both share."
+keywords = ["http", "stdio", "transport", "sse", "client"]
+categories = ["network-programming", "web-programming::http-client"]
+
+[dependencies]
+async-stream = { version = "0.3", optional = true }
+bytes = { version = "1", optional = true }
+futures-util = { version = "0.3", default-features = false, features = ["alloc"], optional = true }
+http = { version = "1", optional = true }
+http-body = { version = "1", optional = true }
+http-body-util = { version = "0.1", optional = true }
+hyper = { version = "1", optional = true }
+hyper-util = { version = "0.1", features = ["tokio"], optional = true }
+percent-encoding = { version = "2", optional = true }
+reqwest = { version = "0.13", default-features = false, features = ["rustls"], optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", optional = true }
+serde_path_to_error = { version = "0.1", optional = true }
+sse-stream = { version = "0.2", optional = true }
+tokio = { version = "1", features = ["io-util", "macros", "process", "rt", "sync", "time"], optional = true }
+tokio-rustls = { version = "0.26", optional = true }
+tower-service = { version = "0.3", optional = true }
+
+[dev-dependencies]
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
+http-over-x = { path = ".", features = ["client", "server", "tls"] }
+rcgen = "0.13"
+rstest = "0.28.0"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "test-util"] }
+tokio-rustls = "0.26"
+
+[features]
+default = ["client"]
+client = [
+    "dep:async-stream",
+    "dep:bytes",
+    "dep:futures-util",
+    "dep:http",
+    "dep:http-body-util",
+    "dep:hyper",
+    "dep:hyper-util",
+    "dep:percent-encoding",
+    "dep:reqwest",
+    "dep:serde_json",
+    "dep:sse-stream",
+    "dep:tokio",
+    "hyper/client",
+    "hyper/http2",
+]
+server = [
+    "dep:bytes",
+    "dep:futures-util",
+    "dep:http",
+    "dep:http-body",
+    "dep:hyper",
+    "dep:hyper-util",
+    "dep:serde_json",
+    "dep:serde_path_to_error",
+    "dep:tokio",
+    "dep:tower-service",
+    "hyper/http2",
+    "hyper/server",
+    "hyper-util/server-auto",
+    "hyper-util/service",
+    "tokio/net",
+]
+tls = ["server", "dep:tokio-rustls"]
