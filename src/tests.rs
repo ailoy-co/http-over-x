@@ -22,7 +22,7 @@ use rstest::rstest;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use crate::{Auth, Client, Error, full, segments, serve_stdio, serve_tcp, sse};
+use crate::{Auth, Client, Error, full, segments, serve_tcp, sse};
 
 /// A transport a test's router is served over, and its client asks over.
 #[derive(Clone, Copy)]
@@ -44,12 +44,7 @@ impl Over {
                 tokio::spawn(serve_tcp(router, listener));
                 Client::connect(&url, Auth::None, HeaderMap::new()).unwrap()
             }
-            Stdio => {
-                let (pipe, server) = tokio::io::duplex(64 * 1024);
-                let (input, output) = tokio::io::split(server);
-                tokio::spawn(serve_stdio(router, input, output));
-                Client::over(pipe)
-            }
+            Stdio => Client::embed(router),
         }
     }
 }

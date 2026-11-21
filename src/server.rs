@@ -272,18 +272,6 @@ mod tests {
     use crate::{Auth, Client};
 
     #[tokio::test]
-    async fn serve_stdio_returns_on_close() {
-        let router = Router::new().route("/ping", get(|| async { Json("pong") }));
-        let (pipe, server) = tokio::io::duplex(64 * 1024);
-        let (input, output) = tokio::io::split(server);
-        let served = tokio::spawn(serve_stdio(router, input, output));
-        let client = Client::over(pipe);
-        assert_eq!(client.get::<String>("/ping").await.unwrap(), "pong");
-        client.close().await;
-        served.await.unwrap().unwrap();
-    }
-
-    #[tokio::test]
     async fn serve_tcp_drop_cancels() {
         let router = Router::new()
             .route("/ping", get(|| async { Json("pong") }))

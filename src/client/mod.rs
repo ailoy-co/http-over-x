@@ -143,6 +143,31 @@ impl Client {
         Tcp::connect(url, auth, headers).map(|tcp| Self::new(Connection::Tcp(tcp)))
     }
 
+    /// Serve `service` in this process and talk to it over an in-memory pipe, one HTTP/2
+    /// connection as over stdio: what [`serve_stdio`](crate::serve_stdio) is given, where
+    /// [`spawn`](Self::spawn) would start a server of it as a child. No credentials are sent,
+    /// as over stdio, and the service is dropped once the client is. Must be called inside a
+    /// tokio runtime.
+    #[cfg(feature = "server")]
+    pub fn embed<S, B>(service: S) -> Self
+    where
+        S: tower_service::Service<
+                http::Request<hyper::body::Incoming>,
+                Response = http::Response<B>,
+            > + Clone
+            + Send
+            + 'static,
+        S::Future: Send + 'static,
+        S::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+        B: http_body::Body<Data = Bytes> + Send + 'static,
+        B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+    {
+        let (pipe, server) = tokio::io::duplex(64 * 1024);
+        let (input, output) = tokio::io::split(server);
+        tokio::spawn(crate::serve_stdio(service, input, output));
+        Self::new(Connection::Stdio(Stdio::over(pipe, None)))
+    }
+
     /// Send `auth` with every request from now on, in place of what was given at
     /// [`connect`](Self::connect): a new token, when the server's are short-lived. A forwarder
     /// already open sends it with its next connection. Over stdio, where none is sent, nothing
@@ -173,17 +198,6 @@ impl Client {
             Some(value) => own.insert(name, value),
             None => own.remove(name),
         };
-    }
-
-    /// A client of the server at the other end of `io`, one HTTP/2 connection as over stdio:
-    /// a server that `serve_stdio` answers over a pipe or a socket this
-    /// program opened itself, where [`spawn`](Self::spawn) would start it as a child. No
-    /// credentials are sent, as over stdio. Must be called inside a tokio runtime.
-    pub fn over<T>(io: T) -> Self
-    where
-        T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Unpin + 'static,
-    {
-        Self::new(Connection::Stdio(Stdio::over(io, None)))
     }
 
     /// Send `request` to whichever endpoint its URI, a path under the server's base, names. An
@@ -660,12 +674,26 @@ mod tests {
                 )
             }),
         );
-        let (pipe, server) = tokio::io::duplex(64 * 1024);
-        let (input, output) = tokio::io::split(server);
-        tokio::spawn(crate::serve_stdio(router, input, output));
-        let error = Client::over(pipe).get::<String>("/slow").await.unwrap_err();
+        let error = Client::embed(router)
+            .get::<String>("/slow")
+            .await
+            .unwrap_err();
         assert!(matches!(error, Error::Status(503, _, _)), "{error:?}");
         assert_eq!(asked.load(Ordering::SeqCst), 3);
+    }
+
+    /// The server's end of a pipe is done, and without an error, once the client closes its
+    /// own: here, where the pipe is the test's to open.
+    #[tokio::test]
+    async fn serve_stdio_returns_on_close() {
+        let router = Router::new().route("/ping", get(|| async { Json("pong") }));
+        let (pipe, server) = tokio::io::duplex(64 * 1024);
+        let (input, output) = tokio::io::split(server);
+        let served = tokio::spawn(crate::serve_stdio(router, input, output));
+        let client = Client::new(Connection::Stdio(Stdio::over(pipe, None)));
+        assert_eq!(client.get::<String>("/ping").await.unwrap(), "pong");
+        client.close().await;
+        served.await.unwrap().unwrap();
     }
 
     #[cfg(unix)]

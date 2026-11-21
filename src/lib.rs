@@ -2,7 +2,8 @@
 //!
 //! A [`Client`] sends the same requests over either transport, which only opening tells apart:
 //! [`Client::spawn`] starts the server and talks to it in one HTTP/2 connection over its stdin
-//! and stdout, and [`Client::connect`] reaches one at a base URL over TCP. A server answers
+//! and stdout, and [`Client::connect`] reaches one at a base URL over TCP. (`Client::embed`
+//! serves one in this process, as a test would.) A server answers
 //! both with one router, a `tower` service: [`serve_stdio`] serves it over its own stdin and
 //! stdout, and [`serve_tcp`], or any HTTP server, over a socket (`serve_tls` where its
 //! clients are on other machines, and send no token in the clear).
